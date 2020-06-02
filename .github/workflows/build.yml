@@ -109,8 +109,22 @@ jobs:
         with:
           api-level: 29
           script: |
+            #script: ./gradlew connectedCheck
             adb -e shell screencap /sdcard/screen.png
-            adb -e pull /sdcard/screen.png
+            adb -e pull /sdcard/screen.png  
+            
+      - name: Commit and push results to temp branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH_NAME="temp_branch_${{github.run_id}}"
+          git fetch
+          git checkout -b $BRANCH_NAME
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "record snapshots"
+          git push --set-upstream origin $BRANCH_NAME
 
       - name: Copy reports
         if: always()
