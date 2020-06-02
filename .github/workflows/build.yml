@@ -1,0 +1,124 @@
+name: Build
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v1
+        with:
+          java-version: 1.8
+
+      - name: Generate cache key
+        run: ./checksum.sh checksum.txt
+
+      - name: Copy CI properties
+        run: |
+          mkdir -p ~/.gradle
+          cp .github/ci-gradle.properties ~/.gradle/gradle.properties
+
+      - name: Restore Gradle cache
+        uses: actions/cache@v1
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradlecache-${{ hashFiles('checksum.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-gradlecache-
+
+      - name: Restore Gradle dist cache
+        uses: actions/cache@v1
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: ${{ runner.os }}-gradledist-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Restore robolectric cache
+        uses: actions/cache@v1
+        with:
+          path: ~/.m2/repository/org/robolectric/android-all
+          key: ${{ runner.os }}-robolectric-${{ hashFiles('test-shared/src/main/resources/robolectric.properties') }}
+
+      - name: Build
+        run: ./gradlew spotlessCheck app:lintDebug testDebugUnitTest app:assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v1
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug
+
+      - name: Copy lint reports
+        if: always()
+        run: |
+          mkdir -p lint
+          find ./app/build/reports -type f -name "lint*" -exec cp {} lint/ \;
+
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v1
+        with:
+          name: lint
+          path: lint
+
+      - name: Copy test results
+        if: always()
+        run: |
+          mkdir -p junit
+          find . -type f -regex ".*/build/test-results/.*xml" -exec cp {} junit/ \;
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v1
+        with:
+          name: junit-results
+          path: junit
+
+  ui-test:
+    name: UI tests
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v1
+        with:
+          java-version: 1.8
+
+      - name: Copy CI properties
+        run: |
+          mkdir -p ~/.gradle
+          cp .github/ci-gradle.properties ~/.gradle/gradle.properties
+
+      - name: Run connected tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          script: ./gradlew connectedCheck
+
+      - name: Copy reports
+        if: always()
+        run: |
+          mkdir -p android-junit
+          find . -type d -regex ".*/build/reports/androidTests/connected" -exec cp -r {} android-junit/ \;
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v1
+        with:
+          name: android-junit
+          path: android-junit
