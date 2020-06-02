@@ -108,7 +108,9 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
-          script: ./gradlew connectedCheck
+          script: |
+            adb -e shell screencap /sdcard/screen.png
+            adb -e pull /sdcard/screen.png
 
       - name: Copy reports
         if: always()
